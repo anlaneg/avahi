@@ -71,14 +71,14 @@ typedef enum {
 } ClientState;
 
 struct Client {
-    Server *server;
+    Server *server;/*此client对应的server*/
 
     ClientState state;
 
-    int fd;
+    int fd;/*client对应的fd*/
     AvahiWatch *watch;
 
-    char inbuf[BUFFER_SIZE], outbuf[BUFFER_SIZE];
+    char inbuf[BUFFER_SIZE]/*要接收的内容*/, outbuf[BUFFER_SIZE]/*要发送到对端的内容*/;
     size_t inbuf_length, outbuf_length;
 
     AvahiSHostNameResolver *host_name_resolver;
@@ -92,11 +92,11 @@ struct Client {
 
 struct Server {
     const AvahiPoll *poll_api;
-    int fd;
-    AvahiWatch *watch;
+    int fd;/*server监听的unix socket地址*/
+    AvahiWatch *watch;/*server fd的处理函数server_work*/
     AVAHI_LLIST_HEAD(Client, clients);
 
-    unsigned n_clients;
+    unsigned n_clients;/*此server总接入的clients数目*/
     int remove_socket;
 };
 
@@ -142,6 +142,7 @@ static void client_new(Server *s, int fd) {
     c->address_resolver = NULL;
     c->dns_server_browser = NULL;
 
+    /*创建此client fd对应的watch*/
     c->watch = s->poll_api->watch_new(s->poll_api, fd, AVAHI_WATCH_IN, client_work, c);
 
     AVAHI_LLIST_PREPEND(Client, clients, s->clients, c);
@@ -273,6 +274,7 @@ static void handle_line(Client *c, const char *s) {
     if (c->state != CLIENT_IDLE)
         return;
 
+    /*取命令行参数*/
     if ((n_args = sscanf(s, "%63s %63s", cmd, arg)) < 1 ) {
         client_output_printf(c, "%+i Failed to parse command, try \"HELP\".\n", AVAHI_ERR_INVALID_OPERATION);
         c->state = CLIENT_DEAD;
@@ -280,6 +282,7 @@ static void handle_line(Client *c, const char *s) {
     }
 
     if (strcmp(cmd, "HELP") == 0) {
+    	/*显示帮助*/
         client_output_printf(c,
                              "+ Available commands are:\n"
                              "+      RESOLVE-HOSTNAME <hostname>\n"
@@ -291,27 +294,32 @@ static void handle_line(Client *c, const char *s) {
                              "+      BROWSE-DNS-SERVERS-IPV6\n");
         c->state = CLIENT_DEAD; }
     else if (strcmp(cmd, "FUCK") == 0 && n_args == 1) {
+    	/*断开*/
         client_output_printf(c, "+ FUCK: Go fuck yourself!\n");
         c->state = CLIENT_DEAD;
     } else if (strcmp(cmd, "RESOLVE-HOSTNAME-IPV4") == 0 && n_args == 2) {
+    	/*解析ipv4地址*/
         c->state = CLIENT_RESOLVE_HOSTNAME;
         if (!(c->host_name_resolver = avahi_s_host_name_resolver_new(avahi_server, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, arg, c->afquery = AVAHI_PROTO_INET, AVAHI_LOOKUP_USE_MULTICAST, host_name_resolver_callback, c)))
             goto fail;
 
         avahi_log_debug(__FILE__": Got %s request for '%s'.", cmd, arg);
     } else if (strcmp(cmd, "RESOLVE-HOSTNAME-IPV6") == 0 && n_args == 2) {
+    	/*解析ipv6地址*/
         c->state = CLIENT_RESOLVE_HOSTNAME;
         if (!(c->host_name_resolver = avahi_s_host_name_resolver_new(avahi_server, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, arg, c->afquery = AVAHI_PROTO_INET6, AVAHI_LOOKUP_USE_MULTICAST, host_name_resolver_callback, c)))
             goto fail;
 
         avahi_log_debug(__FILE__": Got %s request for '%s'.", cmd, arg);
     } else if (strcmp(cmd, "RESOLVE-HOSTNAME") == 0 && n_args == 2) {
+    	/*解析地址（ipv4/ipv6随便）*/
         c->state = CLIENT_RESOLVE_HOSTNAME;
         if (!(c->host_name_resolver = avahi_s_host_name_resolver_new(avahi_server, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, arg, c->afquery = AVAHI_PROTO_UNSPEC, AVAHI_LOOKUP_USE_MULTICAST, host_name_resolver_callback, c)))
             goto fail;
 
         avahi_log_debug(__FILE__": Got %s request for '%s'.", cmd, arg);
     } else if (strcmp(cmd, "RESOLVE-ADDRESS") == 0 && n_args == 2) {
+    	/*由地址到名称？*/
         AvahiAddress addr;
 
         if (!(avahi_address_parse(arg, AVAHI_PROTO_UNSPEC, &addr))) {
@@ -326,6 +334,7 @@ static void handle_line(Client *c, const char *s) {
         avahi_log_debug(__FILE__": Got %s request for '%s'.", cmd, arg);
 
     } else if (strcmp(cmd, "BROWSE-DNS-SERVERS-IPV4") == 0 && n_args == 1) {
+    	/*显示ipv4 dns?*/
         c->state = CLIENT_BROWSE_DNS_SERVERS;
         if (!(c->dns_server_browser = avahi_s_dns_server_browser_new(avahi_server, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, NULL, AVAHI_DNS_SERVER_RESOLVE, c->afquery = AVAHI_PROTO_INET, AVAHI_LOOKUP_USE_MULTICAST, dns_server_browser_callback, c)))
             goto fail;
@@ -334,6 +343,7 @@ static void handle_line(Client *c, const char *s) {
         avahi_log_debug(__FILE__": Got %s request.", cmd);
 
     } else if (strcmp(cmd, "BROWSE-DNS-SERVERS-IPV6") == 0 && n_args == 1) {
+    	/*显示ipv6 dns?*/
         c->state = CLIENT_BROWSE_DNS_SERVERS;
         if (!(c->dns_server_browser = avahi_s_dns_server_browser_new(avahi_server, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, NULL, AVAHI_DNS_SERVER_RESOLVE, c->afquery = AVAHI_PROTO_INET6, AVAHI_LOOKUP_USE_MULTICAST, dns_server_browser_callback, c)))
             goto fail;
@@ -342,6 +352,7 @@ static void handle_line(Client *c, const char *s) {
         avahi_log_debug(__FILE__": Got %s request.", cmd);
 
     } else if (strcmp(cmd, "BROWSE-DNS-SERVERS") == 0 && n_args == 1) {
+    	/*显示dns地址无论ipv4,ipv6?*/
         c->state = CLIENT_BROWSE_DNS_SERVERS;
         if (!(c->dns_server_browser = avahi_s_dns_server_browser_new(avahi_server, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, NULL, AVAHI_DNS_SERVER_RESOLVE, c->afquery = AVAHI_PROTO_UNSPEC, AVAHI_LOOKUP_USE_MULTICAST, dns_server_browser_callback, c)))
             goto fail;
@@ -366,6 +377,7 @@ fail:
 static void handle_input(Client *c) {
     assert(c);
 
+    /*按行划分，逐行处理*/
     for (;;) {
         char *e;
         size_t k;
@@ -390,6 +402,7 @@ static void client_work(AvahiWatch *watch, AVAHI_GCC_UNUSED int fd, AvahiWatchEv
     if ((events & AVAHI_WATCH_IN) && c->inbuf_length < sizeof(c->inbuf)) {
         ssize_t r;
 
+        /*读事件，收取读到的内容*/
         if ((r = read(c->fd, c->inbuf + c->inbuf_length, sizeof(c->inbuf) - c->inbuf_length)) <= 0) {
             if (r < 0)
                 avahi_log_warn("read(): %s", strerror(errno));
@@ -400,12 +413,13 @@ static void client_work(AvahiWatch *watch, AVAHI_GCC_UNUSED int fd, AvahiWatchEv
         c->inbuf_length += r;
         assert(c->inbuf_length <= sizeof(c->inbuf));
 
-        handle_input(c);
+        handle_input(c);/*处理输出*/
     }
 
     if ((events & AVAHI_WATCH_OUT) && c->outbuf_length > 0) {
         ssize_t r;
 
+        /*写事件，向对端发送内容（来源于outbuf)*/
         if ((r = write(c->fd, c->outbuf, c->outbuf_length)) < 0) {
             avahi_log_warn("write(): %s", strerror(errno));
             client_free(c);
@@ -441,6 +455,7 @@ static void server_work(AVAHI_GCC_UNUSED AvahiWatch *watch, int fd, AvahiWatchEv
         if ((cfd = accept(fd, NULL, NULL)) < 0)
             avahi_log_error("accept(): %s", strerror(errno));
         else
+        	/*新建入client*/
             client_new(s, cfd);
     }
 }
@@ -484,6 +499,7 @@ int simple_protocol_setup(const AvahiPoll *poll_api) {
 
     } else {
 
+    	/*创建unix socket*/
         if ((server->fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0) {
             avahi_log_warn("socket(AF_LOCAL, SOCK_STREAM, 0): %s", strerror(errno));
             goto fail;
@@ -491,7 +507,7 @@ int simple_protocol_setup(const AvahiPoll *poll_api) {
 
         memset(&sa, 0, sizeof(sa));
         sa.sun_family = AF_LOCAL;
-        strncpy(sa.sun_path, AVAHI_SOCKET, sizeof(sa.sun_path)-1);
+        strncpy(sa.sun_path, AVAHI_SOCKET, sizeof(sa.sun_path)-1);/*设置绑定地址*/
 
         /* We simply remove existing UNIX sockets under this name. The
            Avahi daemon makes sure that it runs only once on a host,
@@ -515,6 +531,7 @@ int simple_protocol_setup(const AvahiPoll *poll_api) {
 
     umask(u);
 
+    /*创建对server fd的watch*/
     server->watch = poll_api->watch_new(poll_api, server->fd, AVAHI_WATCH_IN, server_work, server);
 
     return 0;

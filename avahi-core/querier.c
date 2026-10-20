@@ -102,6 +102,7 @@ void avahi_querier_add(AvahiInterface *i, AvahiKey *key, struct timeval *ret_cti
     assert(i);
     assert(key);
 
+    /*通过key查询queriers hashmap*/
     if ((q = avahi_hashmap_lookup(i->queriers_by_key, key))) {
 
         /* Someone is already browsing for records of this RR key */

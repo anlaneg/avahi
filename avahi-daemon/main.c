@@ -1141,13 +1141,16 @@ static int run_server(DaemonConfig *c) {
     ignore_signal(SIGPIPE);
 
     if (!(nss_support = avahi_nss_support()))
+    	/*nss不可用*/
         avahi_log_warn("WARNING: No NSS support for mDNS detected, consider installing nss-mdns!");
 
+    /*申请并初始化AvahiSimplePoll*/
     if (!(simple_poll_api = avahi_simple_poll_new())) {
         avahi_log_error("Failed to create main loop object.");
         goto finish;
     }
 
+    /*取poll_api*/
     poll_api = avahi_simple_poll_get(simple_poll_api);
 
     if (daemon_signal_init(SIGINT, SIGHUP, SIGTERM, SIGUSR1, 0) < 0) {

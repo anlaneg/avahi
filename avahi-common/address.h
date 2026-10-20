@@ -68,6 +68,7 @@ typedef struct AvahiIPv6Address {
 
 /** Protocol (address family) independent address structure */
 typedef struct AvahiAddress {
+	/*通过proto确定具体采用哪种地址*/
     AvahiProtocol proto; /**< Address family */
 
     union {

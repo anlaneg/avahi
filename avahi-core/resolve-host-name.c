@@ -35,10 +35,10 @@
 
 struct AvahiSHostNameResolver {
     AvahiServer *server;
-    char *host_name;
+    char *host_name;/*请求解析的主机名称*/
 
-    AvahiSRecordBrowser *record_browser_a;
-    AvahiSRecordBrowser *record_browser_aaaa;
+    AvahiSRecordBrowser *record_browser_a;/*请求a类地址*/
+    AvahiSRecordBrowser *record_browser_aaaa;/*请求4a地址*/
 
     AvahiSHostNameResolverCallback callback;
     void* userdata;
@@ -205,7 +205,7 @@ AvahiSHostNameResolver *avahi_s_host_name_resolver_new(
     AvahiServer *server,
     AvahiIfIndex interface,
     AvahiProtocol protocol,
-    const char *host_name,
+    const char *host_name,/*请求解析的主机名称*/
     AvahiProtocol aprotocol,
     AvahiLookupFlags flags,
     AvahiSHostNameResolverCallback callback,
@@ -218,6 +218,7 @@ AvahiSHostNameResolver *avahi_s_host_name_resolver_new(
     assert(host_name);
     assert(callback);
 
+    /*参数校验*/
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, AVAHI_IF_VALID(interface), AVAHI_ERR_INVALID_INTERFACE);
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, AVAHI_PROTO_VALID(protocol), AVAHI_ERR_INVALID_PROTOCOL);
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, avahi_is_valid_fqdn(host_name), AVAHI_ERR_INVALID_HOST_NAME);
@@ -247,6 +248,7 @@ AvahiSHostNameResolver *avahi_s_host_name_resolver_new(
     r->record_browser_aaaa = r->record_browser_a = NULL;
 
     if (aprotocol == AVAHI_PROTO_INET || aprotocol == AVAHI_PROTO_UNSPEC) {
+    	/*请求A类地址*/
         k = avahi_key_new(host_name, AVAHI_DNS_CLASS_IN, AVAHI_DNS_TYPE_A);
         r->record_browser_a = avahi_s_record_browser_new(server, interface, protocol, k, flags, record_browser_callback, r);
         avahi_key_unref(k);
@@ -256,6 +258,7 @@ AvahiSHostNameResolver *avahi_s_host_name_resolver_new(
     }
 
     if (aprotocol == AVAHI_PROTO_INET6 || aprotocol == AVAHI_PROTO_UNSPEC) {
+    	/*请求AAAA类地址*/
         k = avahi_key_new(host_name, AVAHI_DNS_CLASS_IN, AVAHI_DNS_TYPE_AAAA);
         r->record_browser_aaaa = avahi_s_record_browser_new(server, interface, protocol, k, flags, record_browser_callback, r);
         avahi_key_unref(k);

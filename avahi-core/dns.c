@@ -337,9 +337,11 @@ int avahi_dns_packet_check_valid_multicast(AvahiDnsPacket *p) {
     return 0;
 }
 
+/*检查是否为dns查询报文*/
 int avahi_dns_packet_is_query(AvahiDnsPacket *p) {
     assert(p);
 
+    /*0为查询，1为响应*/
     return !(avahi_dns_packet_get_field(p, AVAHI_DNS_FIELD_FLAGS) & AVAHI_DNS_FLAG_QR);
 }
 
@@ -355,11 +357,14 @@ static int consume_labels(AvahiDnsPacket *p, unsigned idx, char *ret_name, size_
         uint8_t n;
 
         if (idx+1 > p->size)
+        	/*超过报文尺寸*/
             return -1;
 
+        /*取第一个字节，做为name的长度*/
         n = AVAHI_DNS_PACKET_DATA(p)[idx];
 
         if (!n) {
+        	/*仅在长度为0时退出*/
             idx++;
             if (!compressed)
                 ret++;
@@ -368,7 +373,7 @@ static int consume_labels(AvahiDnsPacket *p, unsigned idx, char *ret_name, size_
                 return -1;
             *ret_name = 0;
 
-            return ret;
+            return ret;/*返回字符串长度*/
 
         } else if (n <= 63) {
             /* Uncompressed label */
@@ -383,11 +388,12 @@ static int consume_labels(AvahiDnsPacket *p, unsigned idx, char *ret_name, size_
                 return -1;
 
             if (!first_label) {
-                *(ret_name++) = '.';
+                *(ret_name++) = '.';/*添加'.'*/
                 l--;
             } else
                 first_label = 0;
 
+            /*转义处理*/
             if (!(avahi_escape_label((char*) AVAHI_DNS_PACKET_DATA(p) + idx, n, &ret_name, &l)))
                 return -1;
 
@@ -397,7 +403,7 @@ static int consume_labels(AvahiDnsPacket *p, unsigned idx, char *ret_name, size_
                 ret += n;
         } else if ((n & 0xC0) == 0xC0) {
             /* Compressed label */
-
+        	/*压缩模式*/
             if (idx+2 > p->size)
                 return -1;
 
@@ -419,6 +425,7 @@ static int consume_labels(AvahiDnsPacket *p, unsigned idx, char *ret_name, size_
     return -1;
 }
 
+/*解析name*/
 int avahi_dns_packet_consume_name(AvahiDnsPacket *p, char *ret_name, size_t l) {
     int r;
 
@@ -658,6 +665,7 @@ fail:
     return NULL;
 }
 
+/*解析并获取question*/
 AvahiKey* avahi_dns_packet_consume_key(AvahiDnsPacket *p, int *ret_unicast_response) {
     char name[256];
     uint16_t type, class;
@@ -665,6 +673,7 @@ AvahiKey* avahi_dns_packet_consume_key(AvahiDnsPacket *p, int *ret_unicast_respo
 
     assert(p);
 
+    /*取查询头 name,type,class*/
     if (avahi_dns_packet_consume_name(p, name, sizeof(name)) < 0 ||
         avahi_dns_packet_consume_uint16(p, &type) < 0 ||
         avahi_dns_packet_consume_uint16(p, &class) < 0)
@@ -675,6 +684,7 @@ AvahiKey* avahi_dns_packet_consume_key(AvahiDnsPacket *p, int *ret_unicast_respo
 
     class &= ~AVAHI_DNS_UNICAST_RESPONSE;
 
+    /*创建question*/
     if (!(k = avahi_key_new(name, class, type)))
         return NULL;
 

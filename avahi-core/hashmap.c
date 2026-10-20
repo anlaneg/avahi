@@ -111,6 +111,7 @@ void avahi_hashmap_free(AvahiHashmap *m) {
     avahi_free(m);
 }
 
+/*在AvahiHashmap中查询key对应的value*/
 void* avahi_hashmap_lookup(AvahiHashmap *m, const void *key) {
     Entry *e;
 

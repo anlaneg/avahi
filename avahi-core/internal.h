@@ -53,7 +53,7 @@ typedef struct AvahiLegacyUnicastReflectSlot AvahiLegacyUnicastReflectSlot;
 struct AvahiLegacyUnicastReflectSlot {
     AvahiServer *server;
 
-    uint16_t id, original_id;
+    uint16_t id, original_id;/*dns事务id*/
     AvahiAddress address;
     uint16_t port;
     int interface;
@@ -129,9 +129,9 @@ struct AvahiServer {
 
     char *host_name, *host_name_fqdn, *domain_name;
 
-    int fd_ipv4, fd_ipv6,
+    int fd_ipv4, fd_ipv6,/*这两个fd为mdns socket*/
         /* The following two sockets two are used for reflection only */
-        fd_legacy_unicast_ipv4, fd_legacy_unicast_ipv6;
+        fd_legacy_unicast_ipv4, fd_legacy_unicast_ipv6;/*这两个是dns socket*/
 
     AvahiWatch *watch_ipv4, *watch_ipv6,
         *watch_legacy_unicast_ipv4, *watch_legacy_unicast_ipv6;

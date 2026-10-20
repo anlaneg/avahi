@@ -92,6 +92,7 @@ static AvahiSRBLookup* lookup_new(
     assert(AVAHI_IF_VALID(interface));
     assert(AVAHI_PROTO_VALID(protocol));
 
+    /*疑似环状查询，返回NULL*/
     if (b->n_lookups >= AVAHI_LOOKUPS_PER_BROWSER_MAX)
         /* We don't like cyclic CNAMEs */
         return NULL;
@@ -113,7 +114,7 @@ static AvahiSRBLookup* lookup_new(
 
     AVAHI_LLIST_PREPEND(AvahiSRBLookup, lookups, b->lookups, l);
 
-    b->n_lookups ++;
+    b->n_lookups ++;/*记录查询次数*/
 
     return l;
 }
@@ -166,10 +167,11 @@ static AvahiSRBLookup *lookup_find(
 
     assert(b);
 
+    /*遍历b->lookups上所有AvahiSRBLookup，如果命中，则返回*/
     for (l = b->lookups; l; l = l->lookups_next) {
 
-        if ((l->interface == AVAHI_IF_UNSPEC || l->interface == interface) &&
-            (l->interface == AVAHI_PROTO_UNSPEC || l->protocol == protocol) &&
+        if ((l->interface == AVAHI_IF_UNSPEC || l->interface == interface)/*接口命中*/ &&
+            (l->interface == AVAHI_PROTO_UNSPEC || l->protocol == protocol)/*协议族命中*/ &&
             l->flags == flags &&
             avahi_key_equal(l->key, key))
 
@@ -363,19 +365,23 @@ static AvahiSRBLookup* lookup_add(AvahiSRecordBrowser *b, AvahiIfIndex interface
     assert(!b->dead);
 
     if ((l = lookup_find(b, interface, protocol, flags, key)))
+    	/*已有相应的lookup,直接返回*/
         return lookup_ref(l);
 
+    /*不存在相应的lookup,新建一个lookup*/
     if (!(l = lookup_new(b, interface, protocol, flags, key)))
         return NULL;
 
     return l;
 }
 
+/*对lookup进行具体查询*/
 static int lookup_go(AvahiSRBLookup *l) {
     int n = 0;
     assert(l);
 
     if (l->record_browser->dead)
+    	/*已标为dead,直接返回*/
         return 0;
 
     lookup_ref(l);
@@ -514,6 +520,7 @@ void avahi_s_record_browser_restart(AvahiSRecordBrowser *b) {
 
     /* Request a new iteration of the cache scanning */
     if (!b->defer_time_event) {
+    	/*启动一个timer*/
         b->defer_time_event = avahi_time_event_new(b->server->time_event_queue, NULL, defer_callback, b);
         assert(b->defer_time_event);
     }
@@ -534,6 +541,7 @@ AvahiSRecordBrowser *avahi_s_record_browser_new(
     assert(key);
     assert(callback);
 
+    /*参数校验*/
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, AVAHI_IF_VALID(interface), AVAHI_ERR_INVALID_INTERFACE);
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, AVAHI_PROTO_VALID(protocol), AVAHI_ERR_INVALID_PROTOCOL);
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, !avahi_key_is_pattern(key), AVAHI_ERR_IS_PATTERN);
@@ -541,6 +549,7 @@ AvahiSRecordBrowser *avahi_s_record_browser_new(
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, AVAHI_FLAGS_VALID(flags, AVAHI_LOOKUP_USE_WIDE_AREA|AVAHI_LOOKUP_USE_MULTICAST), AVAHI_ERR_INVALID_FLAGS);
     AVAHI_CHECK_VALIDITY_RETURN_NULL(server, !(flags & AVAHI_LOOKUP_USE_WIDE_AREA) || !(flags & AVAHI_LOOKUP_USE_MULTICAST), AVAHI_ERR_INVALID_FLAGS);
 
+    /*构造AvahiSRecordBrowser*/
     if (!(b = avahi_new(AvahiSRecordBrowser, 1))) {
         avahi_server_set_errno(server, AVAHI_ERR_NO_MEMORY);
         return NULL;
@@ -558,6 +567,7 @@ AvahiSRecordBrowser *avahi_s_record_browser_new(
     AVAHI_LLIST_HEAD_INIT(AvahiSRBLookup, b->lookups);
     b->root_lookup = NULL;
 
+    /*将其挂接在server->record_browsers*/
     AVAHI_LLIST_PREPEND(AvahiSRecordBrowser, browser, server->record_browsers, b);
 
     /* The currently cached entries are scanned a bit later, and than we will start querying, too */

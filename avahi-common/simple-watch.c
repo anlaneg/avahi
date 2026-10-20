@@ -35,14 +35,14 @@
 #include "simple-watch.h"
 
 struct AvahiWatch {
-    AvahiSimplePoll *simple_poll;
+    AvahiSimplePoll *simple_poll;/*指向从属的AvahiSimplePoll*/
     int dead;
 
     int idx;
-    struct pollfd pollfd;
+    struct pollfd pollfd;/*watch事件相关*/
 
-    AvahiWatchCallback callback;
-    void *userdata;
+    AvahiWatchCallback callback;/*watch事件处理函数*/
+    void *userdata;/*watch事件处理函数对应的回调*/
 
     AVAHI_LLIST_FIELDS(AvahiWatch, watches);
 };
@@ -72,7 +72,7 @@ struct AvahiSimplePoll {
     int quit;
     int events_valid;
 
-    int n_watches;
+    int n_watches;/*从属于自已的watches数目*/
     AVAHI_LLIST_HEAD(AvahiWatch, watches);
     AVAHI_LLIST_HEAD(AvahiTimeout, timeouts);
 
@@ -98,7 +98,7 @@ void avahi_simple_poll_wakeup(AvahiSimplePoll *s) {
     char c = 'W';
     assert(s);
 
-    write(s->wakeup_pipe[1], &c, sizeof(c));
+    write(s->wakeup_pipe[1], &c, sizeof(c));/*向pipe[1]写，通知pipe[0]读取*/
     s->wakeup_issued = 1;
 }
 
@@ -129,7 +129,8 @@ static int set_nonblock(int fd) {
     return fcntl(fd, F_SETFL, n|O_NONBLOCK);
 }
 
-static AvahiWatch* watch_new(const AvahiPoll *api, int fd, AvahiWatchEvent event, AvahiWatchCallback callback, void *userdata) {
+/*创建AvahiWatch并初始化*/
+static AvahiWatch* watch_new(const AvahiPoll *api, int fd, AvahiWatchEvent event/*关注的事件*/, AvahiWatchCallback callback/*事件处理回调*/, void *userdata) {
     AvahiWatch *w;
     AvahiSimplePoll *s;
 
@@ -140,6 +141,7 @@ static AvahiWatch* watch_new(const AvahiPoll *api, int fd, AvahiWatchEvent event
     s = api->userdata;
     assert(s);
 
+    /*新建一个AvahiWatch*/
     if (!(w = avahi_new(AvahiWatch, 1)))
         return NULL;
 
@@ -149,6 +151,7 @@ static AvahiWatch* watch_new(const AvahiPoll *api, int fd, AvahiWatchEvent event
     w->simple_poll = s;
     w->dead = 0;
 
+    /*指明要poll的fd及事件，将读取到的事件清零*/
     w->pollfd.fd = fd;
     w->pollfd.events = event;
     w->pollfd.revents = 0;
@@ -315,6 +318,7 @@ static void cleanup_timeouts(AvahiSimplePoll *s, int all) {
     s->timeout_req_cleanup = 0;
 }
 
+/*申请并初始化AvahiSimplePoll*/
 AvahiSimplePoll *avahi_simple_poll_new(void) {
     AvahiSimplePoll *s;
 
@@ -329,8 +333,9 @@ AvahiSimplePoll *avahi_simple_poll_new(void) {
     set_nonblock(s->wakeup_pipe[0]);
     set_nonblock(s->wakeup_pipe[1]);
 
-    s->api.userdata = s;
+    s->api.userdata = s;/*使userdata指向自已，以便AvahiPoll可以拿到AvahiSimplePoll*/
 
+    /*为api设置各对应回调*/
     s->api.watch_new = watch_new;
     s->api.watch_free = watch_free;
     s->api.watch_update = watch_update;
@@ -617,6 +622,7 @@ void avahi_simple_poll_quit(AvahiSimplePoll *s) {
     avahi_simple_poll_wakeup(s);
 }
 
+/*取poll对应的api*/
 const AvahiPoll* avahi_simple_poll_get(AvahiSimplePoll *s) {
     assert(s);
 
@@ -630,7 +636,7 @@ static int system_poll(struct pollfd *ufds, unsigned int nfds, int timeout, AVAH
 void avahi_simple_poll_set_func(AvahiSimplePoll *s, AvahiPollFunc func, void *userdata) {
     assert(s);
 
-    s->poll_func = func ? func : system_poll;
+    s->poll_func = func ? func : system_poll;/*如果func未提供，则使用system_poll*/
     s->poll_func_userdata = func ? userdata : NULL;
 
     /* If there is a background thread running the poll() for us, tell it to exit the poll() */

@@ -64,6 +64,7 @@
 #endif
 #endif
 
+/*ipv4 组播组地址及端口*/
 static void mdns_mcast_group_ipv4(struct sockaddr_in *ret_sa) {
     assert(ret_sa);
 
@@ -73,6 +74,7 @@ static void mdns_mcast_group_ipv4(struct sockaddr_in *ret_sa) {
     inet_pton(AF_INET, AVAHI_IPV4_MCAST_GROUP, &ret_sa->sin_addr);
 }
 
+/*ipv6 组播组地址及端口*/
 static void mdns_mcast_group_ipv6(struct sockaddr_in6 *ret_sa) {
     assert(ret_sa);
 
@@ -82,6 +84,7 @@ static void mdns_mcast_group_ipv6(struct sockaddr_in6 *ret_sa) {
     inet_pton(AF_INET6, AVAHI_IPV6_MCAST_GROUP, &ret_sa->sin6_addr);
 }
 
+/*将a,port转换为ipv4 socket地址*/
 static void ipv4_address_to_sockaddr(struct sockaddr_in *ret_sa, const AvahiIPv4Address *a, uint16_t port) {
     assert(ret_sa);
     assert(a);
@@ -93,6 +96,7 @@ static void ipv4_address_to_sockaddr(struct sockaddr_in *ret_sa, const AvahiIPv4
     memcpy(&ret_sa->sin_addr, a, sizeof(AvahiIPv4Address));
 }
 
+/*将a,port转换为ipv6 socket地址*/
 static void ipv6_address_to_sockaddr(struct sockaddr_in6 *ret_sa, const AvahiIPv6Address *a, uint16_t port) {
     assert(ret_sa);
     assert(a);
@@ -104,6 +108,7 @@ static void ipv6_address_to_sockaddr(struct sockaddr_in6 *ret_sa, const AvahiIPv
     memcpy(&ret_sa->sin6_addr, a, sizeof(AvahiIPv6Address));
 }
 
+/*ipv4加入组播组*/
 int avahi_mdns_mcast_join_ipv4(int fd, const AvahiIPv4Address *a, int idx, int join) {
 #ifdef HAVE_STRUCT_IP_MREQN
     struct ip_mreqn mreq;
@@ -130,8 +135,10 @@ int avahi_mdns_mcast_join_ipv4(int fd, const AvahiIPv4Address *a, int idx, int j
      * mcast groups when the iface is down, but don't allow rejoining
      * when it comes back up. This is an ugly workaround */
     if (join)
+    	/*针对join,先执行离开组播组(workaround)*/
         setsockopt(fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
 
+    /*依据join,离开/加入组播组*/
     if (setsockopt(fd, IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         avahi_log_warn("%s failed: %s", join ? "IP_ADD_MEMBERSHIP" : "IP_DROP_MEMBERSHIP", strerror(errno));
         return -1;
@@ -140,6 +147,7 @@ int avahi_mdns_mcast_join_ipv4(int fd, const AvahiIPv4Address *a, int idx, int j
     return 0;
 }
 
+/*ipv6加入组播组*/
 int avahi_mdns_mcast_join_ipv6(int fd, const AvahiIPv6Address *a, int idx, int join) {
     struct ipv6_mreq mreq6;
     struct sockaddr_in6 sa6;
@@ -150,12 +158,14 @@ int avahi_mdns_mcast_join_ipv6(int fd, const AvahiIPv6Address *a, int idx, int j
 
     memset(&mreq6, 0, sizeof(mreq6));
     mdns_mcast_group_ipv6 (&sa6);
-    mreq6.ipv6mr_multiaddr = sa6.sin6_addr;
+    mreq6.ipv6mr_multiaddr = sa6.sin6_addr;/*组播地址*/
     mreq6.ipv6mr_interface = idx;
 
     if (join)
+    	/*针对join,先执行离开组播组(workaround)*/
         setsockopt(fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &mreq6, sizeof(mreq6));
 
+    /*依据join,离开/加入组播组*/
     if (setsockopt(fd, IPPROTO_IPV6, join ? IPV6_ADD_MEMBERSHIP : IPV6_DROP_MEMBERSHIP, &mreq6, sizeof(mreq6)) < 0) {
         avahi_log_warn("%s failed: %s", join ? "IPV6_ADD_MEMBERSHIP" : "IPV6_DROP_MEMBERSHIP", strerror(errno));
         return -1;
@@ -164,6 +174,7 @@ int avahi_mdns_mcast_join_ipv6(int fd, const AvahiIPv6Address *a, int idx, int j
     return 0;
 }
 
+/*针对此fd指定reuseaddr,reuseport*/
 static int reuseaddr(int fd) {
     int yes;
 
@@ -185,6 +196,7 @@ static int reuseaddr(int fd) {
     return 0;
 }
 
+/*地址绑定*/
 static int bind_with_warn(int fd, const struct sockaddr *sa, socklen_t l) {
 
     assert(fd >= 0);
@@ -308,6 +320,7 @@ static int ipv6_pktinfo(int fd) {
     return 0;
 }
 
+/*创建ipv4 udp socket*/
 int avahi_open_socket_ipv4(int no_reuse) {
     struct sockaddr_in local;
     int fd = -1, r, ittl;
@@ -341,7 +354,7 @@ int avahi_open_socket_ipv4(int no_reuse) {
     local.sin_port = htons(AVAHI_MDNS_PORT);
 
     if (no_reuse)
-        r = bind(fd, (struct sockaddr*) &local, sizeof(local));
+        r = bind(fd, (struct sockaddr*) &local, sizeof(local));/*监听AVAHI_MDNS_PORT端口*/
     else
         r = bind_with_warn(fd, (struct sockaddr*) &local, sizeof(local));
 
@@ -411,7 +424,7 @@ int avahi_open_socket_ipv6(int no_reuse) {
     local.sin6_port = htons(AVAHI_MDNS_PORT);
 
     if (no_reuse)
-        r = bind(fd, (struct sockaddr*) &local, sizeof(local));
+        r = bind(fd, (struct sockaddr*) &local, sizeof(local));/*监听AVAHI_MDNS_PORT端口*/
     else
         r = bind_with_warn(fd, (struct sockaddr*) &local, sizeof(local));
 
@@ -440,6 +453,7 @@ fail:
     return -1;
 }
 
+/*消息发送（支持EINTR,EAGAIN重发）*/
 static int sendmsg_loop(int fd, struct msghdr *msg, int flags) {
     assert(fd >= 0);
     assert(msg);
@@ -470,11 +484,11 @@ static int sendmsg_loop(int fd, struct msghdr *msg, int flags) {
 
 int avahi_send_dns_packet_ipv4(
         int fd,
-        AvahiIfIndex interface,
-        AvahiDnsPacket *p,
-        const AvahiIPv4Address *src_address,
-        const AvahiIPv4Address *dst_address,
-        uint16_t dst_port) {
+        AvahiIfIndex interface,/*指定出接口，如为0，则未指定*/
+        AvahiDnsPacket *p,/*要发送的报文*/
+        const AvahiIPv4Address *src_address,/*源地址*/
+        const AvahiIPv4Address *dst_address,/*目的地址，如果为NULL，则采用组播地址*/
+        uint16_t dst_port/*指定目的port*/) {
 
     struct sockaddr_in sa;
     struct msghdr msg;
@@ -493,17 +507,18 @@ int avahi_send_dns_packet_ipv4(
     assert(!dst_address || dst_port > 0);
 
     if (!dst_address)
-        mdns_mcast_group_ipv4(&sa);
+        mdns_mcast_group_ipv4(&sa);/*未提供目的地址，使用mdns的组播地址*/
     else
         ipv4_address_to_sockaddr(&sa, dst_address, dst_port);
 
+    /*ip指出报文起始地址及报文长度*/
     memset(&io, 0, sizeof(io));
     io.iov_base = AVAHI_DNS_PACKET_DATA(p);
     io.iov_len = p->size;
 
     memset(&msg, 0, sizeof(msg));
-    msg.msg_name = &sa;
-    msg.msg_namelen = sizeof(sa);
+    msg.msg_name = &sa;/*设置目的地址*/
+    msg.msg_namelen = sizeof(sa);/*设置目的地址长度*/
     msg.msg_iov = &io;
     msg.msg_iovlen = 1;
     msg.msg_flags = 0;
@@ -526,10 +541,10 @@ int avahi_send_dns_packet_ipv4(
         pkti = (struct in_pktinfo*) CMSG_DATA(cmsg);
 
         if (interface > 0)
-            pkti->ipi_ifindex = interface;
+            pkti->ipi_ifindex = interface;/*指定出接口*/
 
         if (src_address)
-            pkti->ipi_spec_dst.s_addr = src_address->address;
+            pkti->ipi_spec_dst.s_addr = src_address->address;/*指定源地址*/
     }
 #elif defined(IP_MULTICAST_IF)
     if (src_address) {
@@ -559,7 +574,7 @@ int avahi_send_dns_packet_ipv4(
 #warning "FIXME: We need some code to set the outgoing interface/local address here if IP_PKTINFO/IP_MULTICAST_IF is not available"
 #endif
 
-    return sendmsg_loop(fd, &msg, 0);
+    return sendmsg_loop(fd, &msg, 0);/*向外发送*/
 }
 
 int avahi_send_dns_packet_ipv6(
@@ -624,6 +639,7 @@ int avahi_send_dns_packet_ipv6(
     return sendmsg_loop(fd, &msg, 0);
 }
 
+/*自fd中收取dns报文*/
 AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
         int fd,
         AvahiIPv4Address *ret_src_address,
@@ -644,6 +660,7 @@ AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
 
     assert(fd >= 0);
 
+    /*选获取报文大小*/
     if (ioctl(fd, FIONREAD, &ms) < 0) {
         avahi_log_warn("ioctl(): %s", strerror(errno));
         goto fail;
@@ -654,6 +671,7 @@ AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
         goto fail;
     }
 
+    /*申请报文buffer*/
     p = avahi_dns_packet_new(ms + AVAHI_DNS_PACKET_EXTRA_SIZE);
 
     io.iov_base = AVAHI_DNS_PACKET_DATA(p);
@@ -668,6 +686,7 @@ AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
     msg.msg_controllen = sizeof(aux);
     msg.msg_flags = 0;
 
+    /*执行收取*/
     if ((l = recvmsg(fd, &msg, 0)) < 0) {
         /* Linux returns EAGAIN when an invalid IP packet has been
         received. We suppress warnings in this case because this might
@@ -694,9 +713,11 @@ AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
 
     p->size = (size_t) l;
 
+    /*确定源port*/
     if (ret_src_port)
         *ret_src_port = avahi_port_from_sockaddr((struct sockaddr*) &sa);
 
+    /*确定源地址*/
     if (ret_src_address) {
         AvahiAddress a;
         avahi_address_from_sockaddr((struct sockaddr*) &sa, &a);
@@ -709,6 +730,7 @@ AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
     if (ret_iface)
         *ret_iface = AVAHI_IF_UNSPEC;
 
+    /*获取额外信息*/
     for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
 
         if (cmsg->cmsg_level == IPPROTO_IP) {
@@ -718,6 +740,7 @@ AvahiDnsPacket *avahi_recv_dns_packet_ipv4(
                 case IP_RECVTTL:
 #endif
                 case IP_TTL:
+                	/*取收到的ttl*/
                     if (ret_ttl)
                         *ret_ttl = (uint8_t) (*(int *) CMSG_DATA(cmsg));
 
@@ -908,6 +931,7 @@ fail:
     return NULL;
 }
 
+/*创建ipv4单播 udp socket*/
 int avahi_open_unicast_socket_ipv4(void) {
     struct sockaddr_in local;
     int fd = -1;

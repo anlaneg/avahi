@@ -554,6 +554,7 @@ static void socket_event(AVAHI_GCC_UNUSED AvahiWatch *w, int fd, AVAHI_GCC_UNUSE
     AvahiWideAreaLookupEngine *e = userdata;
     AvahiDnsPacket *p = NULL;
 
+    /*收取dns报文（mdns报文）*/
     if (fd == e->fd_ipv4)
         p = avahi_recv_dns_packet_ipv4(e->fd_ipv4, NULL, NULL, NULL, NULL, NULL);
     else {
@@ -562,7 +563,7 @@ static void socket_event(AVAHI_GCC_UNUSED AvahiWatch *w, int fd, AVAHI_GCC_UNUSE
     }
 
     if (p) {
-        handle_packet(e, p);
+        handle_packet(e, p);/*处理packet*/
         avahi_dns_packet_free(p);
     }
 }

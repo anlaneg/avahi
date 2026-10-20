@@ -57,7 +57,7 @@ AvahiKey *avahi_key_new(const char *name, uint16_t class, uint16_t type) {
 
     k->ref = 1;
     k->clazz = class;
-    k->type = type;
+    k->type = type;/*指明地址类型*/
 
     return k;
 }
@@ -328,7 +328,7 @@ int avahi_key_equal(const AvahiKey *a, const AvahiKey *b) {
         return 1;
 
     return avahi_domain_equal(a->name, b->name) &&
-        a->type == b->type &&
+        a->type == b->type /*地址类型命中*/&&
         a->clazz == b->clazz;
 }
 

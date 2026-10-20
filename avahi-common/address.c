@@ -43,6 +43,7 @@ static size_t address_get_size(const AvahiAddress *a) {
     return 0;
 }
 
+/*检查两个地址是否相同*/
 int avahi_address_cmp(const AvahiAddress *a, const AvahiAddress *b) {
     assert(a);
     assert(b);
@@ -102,11 +103,12 @@ char* avahi_reverse_lookup_name(const AvahiAddress *a, char *ret_s, size_t lengt
     return ret_s;
 }
 
-AvahiAddress *avahi_address_parse(const char *s, AvahiProtocol proto, AvahiAddress *ret_addr) {
+AvahiAddress *avahi_address_parse(const char *s, AvahiProtocol proto, AvahiAddress *ret_addr/*出参，确定协议及地址*/) {
     assert(ret_addr);
     assert(s);
 
     if (proto == AVAHI_PROTO_UNSPEC) {
+    	/*未指定协议，优先尝试ipv4转换，再尝试ipv6转换*/
         if (inet_pton(AF_INET, s, ret_addr->data.data) <= 0) {
             if (inet_pton(AF_INET6, s, ret_addr->data.data) <= 0)
                 return NULL;

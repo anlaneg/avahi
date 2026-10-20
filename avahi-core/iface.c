@@ -171,7 +171,7 @@ void avahi_interface_monitor_update_rrs(AvahiInterfaceMonitor *m, int remove_rrs
         avahi_hw_interface_update_rrs(hw, remove_rrs);
 }
 
-static int interface_mdns_mcast_join(AvahiInterface *i, int join) {
+static int interface_mdns_mcast_join(AvahiInterface *i, int join/*是否加入组播组*/) {
     char at[AVAHI_ADDRESS_STR_MAX];
     int r;
     assert(i);
@@ -316,8 +316,9 @@ void avahi_hw_interface_free(AvahiHwInterface *hw, int send_goodbye) {
     if (hw->entry_group)
         avahi_s_entry_group_free(hw->entry_group);
 
+    /*移除指定interface*/
     AVAHI_LLIST_REMOVE(AvahiHwInterface, hardware, hw->monitor->hw_interfaces, hw);
-    avahi_hashmap_remove(hw->monitor->hashmap, &hw->index);
+    avahi_hashmap_remove(hw->monitor->hashmap, &hw->index);/*按index进行移除*/
 
     avahi_free(hw->name);
     avahi_free(hw);
@@ -353,6 +354,7 @@ AvahiInterface* avahi_interface_new(AvahiInterfaceMonitor *m, AvahiHwInterface *
     if (!i->cache || !i->response_scheduler || !i->query_scheduler || !i->probe_scheduler)
         goto fail; /* OOM */
 
+    /*添加Interface*/
     AVAHI_LLIST_PREPEND(AvahiInterface, by_hardware, hw->interfaces, i);
     AVAHI_LLIST_PREPEND(AvahiInterface, interface, m->interfaces, i);
 
@@ -374,6 +376,7 @@ fail:
     return NULL;
 }
 
+/*创建ifindex对应的HwInterface*/
 AvahiHwInterface *avahi_hw_interface_new(AvahiInterfaceMonitor *m, AvahiIfIndex idx) {
     AvahiHwInterface *hw;
 
@@ -397,8 +400,10 @@ AvahiHwInterface *avahi_hw_interface_new(AvahiInterfaceMonitor *m, AvahiIfIndex 
     AVAHI_LLIST_HEAD_INIT(AvahiInterface, hw->interfaces);
     AVAHI_LLIST_PREPEND(AvahiHwInterface, hardware, m->hw_interfaces, hw);
 
+    /*向hashmap中添加此interface*/
     avahi_hashmap_insert(m->hashmap, &hw->index, hw);
 
+    /*添加ipv4,ipv6 interface*/
     if (m->server->fd_ipv4 >= 0 || m->server->config.publish_a_on_ipv6)
         avahi_interface_new(m, hw, AVAHI_PROTO_INET);
     if (m->server->fd_ipv6 >= 0 || m->server->config.publish_aaaa_on_ipv4)
@@ -534,9 +539,11 @@ AvahiInterface* avahi_interface_monitor_get_interface(AvahiInterfaceMonitor *m, 
     assert(idx >= 0);
     assert(protocol != AVAHI_PROTO_UNSPEC);
 
+    /*取ifindex对应的HwInterface*/
     if (!(hw = avahi_interface_monitor_get_hw_interface(m, idx)))
         return NULL;
 
+    /*查找满足protocol的interface*/
     for (i = hw->interfaces; i; i = i->by_hardware_next)
         if (i->protocol == protocol)
             return i;
@@ -544,6 +551,7 @@ AvahiInterface* avahi_interface_monitor_get_interface(AvahiInterfaceMonitor *m, 
     return NULL;
 }
 
+/*通过ifindex查询AvahiHwInterface*/
 AvahiHwInterface* avahi_interface_monitor_get_hw_interface(AvahiInterfaceMonitor *m, AvahiIfIndex idx) {
     assert(m);
     assert(idx >= 0);
@@ -737,6 +745,7 @@ void avahi_interface_monitor_walk(AvahiInterfaceMonitor *m, AvahiIfIndex interfa
         if (protocol != AVAHI_PROTO_UNSPEC) {
             AvahiInterface *i;
 
+            /*通过ifindex,proto找到interface*/
             if ((i = avahi_interface_monitor_get_interface(m, interface, protocol)))
                 callback(m, i, userdata);
 
@@ -744,6 +753,7 @@ void avahi_interface_monitor_walk(AvahiInterfaceMonitor *m, AvahiIfIndex interfa
             AvahiHwInterface *hw;
             AvahiInterface *i;
 
+            /*ifindex找到HwInterface,然后遍历所有interface,检查protocol匹配的interface，再调用callback*/
             if ((hw = avahi_interface_monitor_get_hw_interface(m, interface)))
                 for (i = hw->interfaces; i; i = i->by_hardware_next)
                     if (avahi_interface_match(i, interface, protocol))

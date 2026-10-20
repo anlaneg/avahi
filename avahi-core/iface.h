@@ -60,9 +60,10 @@ struct AvahiInterfaceMonitorOSDep {
 
 struct AvahiInterfaceMonitor {
     AvahiServer *server;
-    AvahiHashmap *hashmap;
+    AvahiHashmap *hashmap;/*记录系统中ifindex与AvahiHwInterface的映射关系*/
 
-    AVAHI_LLIST_HEAD(AvahiInterface, interfaces);
+    AVAHI_LLIST_HEAD(AvahiInterface, interfaces);/*记录所有interface*/
+    /*记录所有HwInterface*/
     AVAHI_LLIST_HEAD(AvahiHwInterface, hw_interfaces);
 
     int list_complete;

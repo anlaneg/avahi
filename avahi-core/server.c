@@ -568,6 +568,7 @@ static void reflect_probe(AvahiServer *s, AvahiInterface *i, AvahiRecord *r) {
             avahi_interface_post_probe(j, r, 1);
 }
 
+/*处理dns查询报文*/
 static void handle_query_packet(AvahiServer *s, AvahiDnsPacket *p, AvahiInterface *i, const AvahiAddress *a, uint16_t port, int legacy_unicast, int from_local_iface) {
     size_t n;
     int is_probe;
@@ -582,10 +583,11 @@ static void handle_query_packet(AvahiServer *s, AvahiDnsPacket *p, AvahiInterfac
     is_probe = avahi_dns_packet_get_field(p, AVAHI_DNS_FIELD_NSCOUNT) > 0;
 
     /* Handle the questions */
-    for (n = avahi_dns_packet_get_field(p, AVAHI_DNS_FIELD_QDCOUNT); n > 0; n --) {
+    for (n = avahi_dns_packet_get_field(p, AVAHI_DNS_FIELD_QDCOUNT)/*取问题数*/; n > 0; n --) {
         AvahiKey *key;
         int unicast_response = 0;
 
+        /*解析question*/
         if (!(key = avahi_dns_packet_consume_key(p, &unicast_response))) {
             avahi_log_debug(__FILE__": Packet too short or invalid while reading question key. (Maybe a UTF-8 problem?)");
             goto fail;
@@ -791,6 +793,7 @@ static void reflect_legacy_unicast_query_packet(AvahiServer *s, AvahiDnsPacket *
     assert(i->protocol == a->proto);
 
     if (!s->config.enable_reflector)
+    	/*未开启，不处理，直接返回*/
         return;
 
     /* Reflecting legacy unicast queries is a little more complicated
@@ -823,6 +826,7 @@ static void reflect_legacy_unicast_query_packet(AvahiServer *s, AvahiDnsPacket *
             j != i &&
             (s->config.reflect_ipv || j->protocol == i->protocol)) {
 
+        	/*将报文转到legacy_unicast socket*/
             if (j->protocol == AVAHI_PROTO_INET && s->fd_legacy_unicast_ipv4 >= 0) {
                 avahi_send_dns_packet_ipv4(s->fd_legacy_unicast_ipv4, j->hardware->index, p, NULL, NULL, 0);
             } else if (j->protocol == AVAHI_PROTO_INET6 && s->fd_legacy_unicast_ipv6 >= 0)
@@ -872,6 +876,7 @@ static int is_mdns_mcast_address(const AvahiAddress *a) {
     AvahiAddress b;
     assert(a);
 
+    /*依据ipv4/ipv6协议传入不同的mdns组播地址*/
     avahi_address_parse(a->proto == AVAHI_PROTO_INET ? AVAHI_IPV4_MCAST_GROUP : AVAHI_IPV6_MCAST_GROUP, a->proto, &b);
     return avahi_address_cmp(a, &b) == 0;
 }
@@ -888,7 +893,7 @@ static int originates_from_local_iface(AvahiServer *s, AvahiIfIndex iface, const
     return avahi_interface_has_address(s->monitor, iface, a);
 }
 
-static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p, const AvahiAddress *src_address, uint16_t port, const AvahiAddress *dst_address, AvahiIfIndex iface, int ttl) {
+static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p/*dns报文*/, const AvahiAddress *src_address, uint16_t port/*源port*/, const AvahiAddress *dst_address, AvahiIfIndex iface, int ttl) {
     AvahiInterface *i;
     int from_local_iface = 0;
 
@@ -897,8 +902,9 @@ static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p, const AvahiAddres
     assert(src_address);
     assert(dst_address);
     assert(iface > 0);
-    assert(src_address->proto == dst_address->proto);
+    assert(src_address->proto == dst_address->proto);/*两者协议必须相等*/
 
+    /*通过ifindex,proto查找对应的interface*/
     if (!(i = avahi_interface_monitor_get_interface(s->monitor, iface, src_address->proto)) ||
         !i->announcing) {
         avahi_log_debug("Received packet from invalid interface.");
@@ -911,6 +917,7 @@ static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p, const AvahiAddres
         return;
     }
 
+    /*这种地址发来的报文不处理*/
     if (avahi_address_is_ipv4_in_ipv6(src_address))
         /* This is an IPv4 address encapsulated in IPv6, so let's ignore it. */
         return;
@@ -923,6 +930,7 @@ static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p, const AvahiAddres
     if (s->config.enable_reflector)
         from_local_iface = originates_from_local_iface(s, iface, src_address, port);
 
+    /*报文有效检查*/
     if (avahi_dns_packet_check_valid_multicast(p) < 0) {
         avahi_log_debug("Received invalid packet.");
         return;
@@ -941,26 +949,29 @@ static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p, const AvahiAddres
 
             if ((avahi_dns_packet_get_field(p, AVAHI_DNS_FIELD_ANCOUNT) != 0 ||
                  avahi_dns_packet_get_field(p, AVAHI_DNS_FIELD_NSCOUNT) != 0)) {
+            	/*查询报文，传统dns的answer,nameserver均应为0*/
                 avahi_log_debug("Invalid legacy unicast query packet.");
                 return;
             }
 
-            legacy_unicast = 1;
+            legacy_unicast = 1;/*标明是legacy dns*/
         }
 
         if (!is_mdns_mcast_address(dst_address) &&
             !avahi_interface_address_on_link(i, src_address)) {
-
+        	/*收到dns报文，但目的ip与本接口不匹配，忽略*/
             avahi_log_debug("Received non-local unicast query from host %s on interface '%s.%i'.", avahi_address_snprint(t, sizeof(t), src_address), i->hardware->name, i->protocol);
             return;
         }
 
         if (legacy_unicast)
+        	/*传统dns报文处理*/
             reflect_legacy_unicast_query_packet(s, p, i, src_address, port);
 
         handle_query_packet(s, p, i, src_address, port, legacy_unicast, from_local_iface);
 
     } else {
+    	/*收到dns response报文*/
         char t[AVAHI_ADDRESS_STR_MAX];
 
         if (port != AVAHI_MDNS_PORT) {
@@ -988,6 +999,7 @@ static void dispatch_packet(AvahiServer *s, AvahiDnsPacket *p, const AvahiAddres
             return;
         }
 
+        /*处理dns响应报文*/
         handle_response_packet(s, p, i, src_address, from_local_iface);
     }
 }
@@ -1023,6 +1035,7 @@ static void dispatch_legacy_unicast_packet(AvahiServer *s, AvahiDnsPacket *p) {
     avahi_dns_packet_set_field(p, AVAHI_DNS_FIELD_ID, slot->id);
 }
 
+/*mdns socket fd收到读事件时，处理读取*/
 static void mcast_socket_event(AvahiWatch *w, int fd, AvahiWatchEvent events, void *userdata) {
     AvahiServer *s = userdata;
     AvahiAddress dest, src;
@@ -1035,6 +1048,7 @@ static void mcast_socket_event(AvahiWatch *w, int fd, AvahiWatchEvent events, vo
     assert(fd >= 0);
     assert(events & AVAHI_WATCH_IN);
 
+    /*收取dns报文（mdns报文）*/
     if (fd == s->fd_ipv4) {
         dest.proto = src.proto = AVAHI_PROTO_INET;
         p = avahi_recv_dns_packet_ipv4(s->fd_ipv4, &src.data.ipv4, &port, &dest.data.ipv4, &iface, &ttl);
@@ -1046,11 +1060,14 @@ static void mcast_socket_event(AvahiWatch *w, int fd, AvahiWatchEvent events, vo
 
     if (p) {
         if (iface == AVAHI_IF_UNSPEC)
+        	/*dstip是本机，故通过destip查找interface*/
             iface = avahi_find_interface_for_address(s->monitor, &dest);
 
         if (iface != AVAHI_IF_UNSPEC)
+        	/*执行报文处理*/
             dispatch_packet(s, p, &src, port, &dest, iface, ttl);
         else
+        	/*无法查找到对应的interface,报错*/
             avahi_log_error("Incoming packet received on address that isn't local.");
 
         avahi_dns_packet_free(p);
@@ -1059,6 +1076,7 @@ static void mcast_socket_event(AvahiWatch *w, int fd, AvahiWatchEvent events, vo
     }
 }
 
+/*dns socket fd收到读事件时，处理读取*/
 static void legacy_unicast_socket_event(AvahiWatch *w, int fd, AvahiWatchEvent events, void *userdata) {
     AvahiServer *s = userdata;
     AvahiDnsPacket *p = NULL;
@@ -1067,6 +1085,7 @@ static void legacy_unicast_socket_event(AvahiWatch *w, int fd, AvahiWatchEvent e
     assert(fd >= 0);
     assert(events & AVAHI_WATCH_IN);
 
+    /*收取dns报文（普通dns报文）*/
     if (fd == s->fd_legacy_unicast_ipv4)
         p = avahi_recv_dns_packet_ipv4(s->fd_legacy_unicast_ipv4, NULL, NULL, NULL, NULL, NULL);
     else {
@@ -1181,6 +1200,7 @@ static void register_hinfo(AvahiServer *s) {
 
 }
 
+/*注册localhost,ip6-localhost*/
 static void register_localhost(AvahiServer *s) {
     AvahiAddress a;
     assert(s);
@@ -1333,6 +1353,7 @@ static int valid_server_config(const AvahiServerConfig *sc) {
 static int setup_sockets(AvahiServer *s) {
     assert(s);
 
+    /*创建组播ipv4/ipv6 mdns socket*/
     s->fd_ipv4 = s->config.use_ipv4 ? avahi_open_socket_ipv4(s->config.disallow_other_stacks) : -1;
     s->fd_ipv6 = s->config.use_ipv6 ? avahi_open_socket_ipv6(s->config.disallow_other_stacks) : -1;
 
@@ -1344,6 +1365,7 @@ static int setup_sockets(AvahiServer *s) {
     else if (s->fd_ipv6 < 0 && s->config.use_ipv6)
         avahi_log_notice("Failed to create IPv6 socket, proceeding in IPv4 only mode");
 
+    /*创建ipv4/ipv6传统dns socket*/
     s->fd_legacy_unicast_ipv4 = s->fd_ipv4 >= 0 && s->config.enable_reflector ? avahi_open_unicast_socket_ipv4() : -1;
     s->fd_legacy_unicast_ipv6 = s->fd_ipv6 >= 0 && s->config.enable_reflector ? avahi_open_unicast_socket_ipv6() : -1;
 
@@ -1352,11 +1374,13 @@ static int setup_sockets(AvahiServer *s) {
         s->watch_legacy_unicast_ipv4 =
         s->watch_legacy_unicast_ipv6 = NULL;
 
+    /*定义mdns报文接收*/
     if (s->fd_ipv4 >= 0)
         s->watch_ipv4 = s->poll_api->watch_new(s->poll_api, s->fd_ipv4, AVAHI_WATCH_IN, mcast_socket_event, s);
     if (s->fd_ipv6 >= 0)
         s->watch_ipv6 = s->poll_api->watch_new(s->poll_api, s->fd_ipv6, AVAHI_WATCH_IN, mcast_socket_event, s);
 
+    /*定义dns报文接收*/
     if (s->fd_legacy_unicast_ipv4 >= 0)
         s->watch_legacy_unicast_ipv4 = s->poll_api->watch_new(s->poll_api, s->fd_legacy_unicast_ipv4, AVAHI_WATCH_IN, legacy_unicast_socket_event, s);
     if (s->fd_legacy_unicast_ipv6 >= 0)
@@ -1389,6 +1413,7 @@ AvahiServer *avahi_server_new(const AvahiPoll *poll_api, const AvahiServerConfig
     else
         avahi_server_config_init(&s->config);
 
+    /*创建sockets,临听dns,mdns端口*/
     if ((e = setup_sockets(s)) < 0) {
         if (error)
             *error = e;

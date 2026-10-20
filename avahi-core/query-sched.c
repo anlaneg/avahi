@@ -71,7 +71,7 @@ struct AvahiQueryScheduler {
 
     unsigned next_id;
 
-    AVAHI_LLIST_HEAD(AvahiQueryJob, jobs);
+    AVAHI_LLIST_HEAD(AvahiQueryJob, jobs);/*记录待查询的job*/
     AVAHI_LLIST_HEAD(AvahiQueryJob, history);
     AVAHI_LLIST_HEAD(AvahiKnownAnswer, known_answers);
 };
@@ -320,7 +320,7 @@ static AvahiQueryJob* find_scheduled_job(AvahiQueryScheduler *s, AvahiKey *key) 
         assert(!qj->done);
 
         if (avahi_key_equal(qj->key, key))
-            return qj;
+            return qj;/*两者相同，复用此job*/
     }
 
     return NULL;

@@ -55,12 +55,13 @@ int sd_listen_fds(int unset_environment) {
         unsigned long l;
 
         if (!(e = getenv("LISTEN_PID"))) {
+        	/*未定义此环境变量，直接退出*/
                 r = 0;
                 goto finish;
         }
 
         errno = 0;
-        l = strtoul(e, &p, 10);
+        l = strtoul(e, &p, 10);/*取listen pid*/
 
         if (errno != 0) {
                 r = -errno;
@@ -74,11 +75,13 @@ int sd_listen_fds(int unset_environment) {
 
         /* Is this for us? */
         if (getpid() != (pid_t) l) {
+        	/*提供的pid不是我们的pid,退出*/
                 r = 0;
                 goto finish;
         }
 
         if (!(e = getenv("LISTEN_FDS"))) {
+        	/*未提供listen fds,退出*/
                 r = 0;
                 goto finish;
         }
@@ -96,6 +99,7 @@ int sd_listen_fds(int unset_environment) {
                 goto finish;
         }
 
+        /*遍历传入的所有fd（l之前）*/
         for (fd = SD_LISTEN_FDS_START; fd < SD_LISTEN_FDS_START + (int) l; fd ++) {
                 int flags;
 
@@ -107,15 +111,17 @@ int sd_listen_fds(int unset_environment) {
                 if (flags & FD_CLOEXEC)
                         continue;
 
+                /*标明在exec被执行时关闭此fd*/
                 if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
                         r = -errno;
                         goto finish;
                 }
         }
 
-        r = (int) l;
+        r = (int) l;/*返回l*/
 
 finish:
+		/*丢弃此环境变量*/
         if (unset_environment) {
                 unsetenv("LISTEN_PID");
                 unsetenv("LISTEN_FDS");

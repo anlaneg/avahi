@@ -32,6 +32,7 @@ int avahi_nss_support(void) {
     int b = 0;
 
 #ifdef HAVE_DLOPEN
+    /*检查以下三个lib是否有任意可用*/
     static const char * const libs[] = {
         "libnss_mdns.so.2",
         "libnss_mdns4.so.2",
